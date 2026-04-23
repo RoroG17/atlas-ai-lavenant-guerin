@@ -4,7 +4,8 @@ import time
 
 def run_dialogue(turns: int = 50, model: str = "llama3.2:3b", timeout: int = 30) -> None:
     client = OllamaClient(base_url="http://localhost:11434", timeout=timeout)
-    session = ChatSession(model, client)
+    # Désactiver la mémoire pour ce test (mesure pure de la fenêtre de contexte)
+    session = ChatSession(model, client, enable_memory=False)
 
     print(f"Lancement d'un dialogue de {turns} tours avec le modèle {model}...\n")
     print("Tour | Prompt tokens | Completion tokens | Latency (ms)")
