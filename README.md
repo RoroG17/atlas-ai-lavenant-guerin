@@ -161,14 +161,6 @@ atlas-ai/
 | **Espace disque** | ~2KB / message |
 | **Max souvenirs** | Illimité (SQLite) |
 
----
-
-## Documentation supplémentaire
-
-- [Stratégie de mémorisation](MEMORY_STRATEGY.md)
-- [Implémentation Sprint 2](SPRINT2_IMPLEMENTATION.md)
-- [Quick start mémoire](MEMORY_QUICK_START.md)
-- [Checklist tâche 2](TASK2_CHECKLIST.md)
 
 ---
 
