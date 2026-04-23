@@ -47,3 +47,17 @@ Ce script envoie 50 tours successifs à Ollama et affiche pour chaque tour :
 - au début, le modèle conserve bien le contexte et répond de façon cohérente
 - au-delà d'un certain nombre de tours, la taille du prompt augmente et la cohérence peut diminuer
 - les tokens envoyés augmentent à chaque tour, ce qui montre pourquoi une mémoire longue est nécessaire pour maintenir une qualité stable
+
+### Statégie de mémorisation
+
+Qu'est-ce qu'on stocke ? 
+On a décidé de stocker des résumers des réponses associées à des mots clés qui sont dans la question
+
+Quand on cherche en mémoire ? 
+Seulements sur les mots clés de la question
+
+Combien de souvenir on injecte dans le prompt ?
+1
+
+Comment on gère les doublons / infos contradictoires ?
+On supprime les doublons et pour les contradictions, on garde la dernière réponse.
