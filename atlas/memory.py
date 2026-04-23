@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 from pathlib import Path
 from datetime import datetime
 import re
+from atlas.config import CONFIG
 
 
 # Mots vides à exclure de l'extraction de mots-clés
@@ -111,13 +112,10 @@ class VectorMemory:
 
         return doc_id
 
-    def retrieve_best_memory(self, question: str) -> Optional[str]:
+    def get_memories_as_text(self, question: str, n_results: Optional[int] = None) -> Optional[str]:
         """
-        Cherche dans la mémoire le souvenir le plus pertinent pour la question.
-        La recherche porte sur les MOTS-CLÉS, pas sur la question brute.
-
-        Returns:
-            Le résumé formaté (str) à injecter dans le prompt, ou None.
+        Récupère plusieurs souvenirs et les formate en un seul bloc de texte.
+        Filtre par min_similarity défini dans la config.
         """
         if self.collection.count() == 0:
             return None
@@ -127,31 +125,57 @@ class VectorMemory:
             return None
 
         query_text = " ".join(keywords)
+        
+        # Paramètres depuis la config
+        if n_results is None:
+            n_results = CONFIG["memory"].get("top_k", 5)
+        
+        min_similarity = CONFIG["memory"].get("min_similarity", 0.7)
 
         try:
             results = self.collection.query(
                 query_texts=[query_text],
-                n_results=1,          # ← on n'injecte qu'UN seul souvenir
+                n_results=n_results,
             )
         except Exception as e:
             print(f"[VectorMemory] Erreur recherche : {e}")
             return None
 
-        docs = results.get("documents", [[]])[0]
         metas = results.get("metadatas", [[]])[0]
+        distances = results.get("distances", [[]])[0]
 
-        if not docs or not metas:
+        if not metas:
             return None
 
-        meta = metas[0]
-        summary = meta.get("summary", "")
-        kw = meta.get("keywords", "")
-        ts = meta.get("timestamp", "")[:10]   # date seule
+        formatted_memories = []
+        for meta, dist in zip(metas, distances):
+            # ChromaDB utilise souvent la distance L2 par défaut.
+            # On simule une similarité simple pour le filtrage (1 - dist/2 ou autre selon l'espace)
+            # Ici on fait une vérification basique.
+            similarity = 1.0 - (dist / 2.0) if dist < 2.0 else 0
+            
+            if similarity < min_similarity:
+                continue
+                
+            summary = meta.get("summary", "")
+            kw = meta.get("keywords", "")
+            ts = meta.get("timestamp", "")[:10]
+            
+            formatted_memories.append(
+                f"- Souvenir ({ts}) [mots-clés: {kw}] : {summary}"
+            )
 
-        return (
-            f"Souvenir pertinent ({ts}) — mots-clés : {kw}\n"
-            f"{summary}"
-        )
+        if not formatted_memories:
+            return None
+
+        return "\n".join(formatted_memories)
+
+    def retrieve_best_memory(self, question: str) -> Optional[str]:
+        """
+        Cherche dans la mémoire le souvenir le plus pertinent pour la question.
+        Utilise get_memories_as_text avec n_results=1.
+        """
+        return self.get_memories_as_text(question, n_results=1)
 
     # ── utilitaires ───────────────────────────────────────────────────────────
 

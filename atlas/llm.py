@@ -4,6 +4,7 @@ import time
 from typing import List, Dict, Optional, Iterator, Union, Tuple
 from atlas.memory import VectorMemory
 from atlas.monitoring import traced
+from atlas.config import CONFIG
 
 class OllamaClient:
     def __init__(self, base_url: str = "http://localhost:11434", timeout: int = 30):
@@ -46,6 +47,17 @@ class OllamaClient:
                     response.raise_for_status()
                     return self._handle_stream(response)
             else:
+                # Ajouter les paramètres du modèle depuis la config s'ils ne sont pas surchargés
+                options = {
+                    "temperature": CONFIG["model"].get("temperature", 0.3),
+                    "top_p": CONFIG["model"].get("top_p", 0.9),
+                    "num_ctx": CONFIG["model"].get("num_ctx", 4096)
+                }
+                if "options" in kwargs:
+                    options.update(kwargs.pop("options"))
+                
+                payload["options"] = options
+                
                 response = self._client.post(url, json=payload)
                 response.raise_for_status()
                 result = response.json()
@@ -81,6 +93,17 @@ class OllamaClient:
             if stream:
                 raise NotImplementedError("chat_with_metrics n'est pas compatible avec stream=True")
             else:
+                # Ajouter les paramètres du modèle
+                options = {
+                    "temperature": CONFIG["model"].get("temperature", 0.3),
+                    "top_p": CONFIG["model"].get("top_p", 0.9),
+                    "num_ctx": CONFIG["model"].get("num_ctx", 4096)
+                }
+                if "options" in kwargs:
+                    options.update(kwargs.pop("options"))
+                
+                payload["options"] = options
+
                 response = self._client.post(url, json=payload)
                 response.raise_for_status()
                 result = response.json()
@@ -132,17 +155,23 @@ class ChatSession:
         # Préparer les messages à envoyer au modèle
         messages_to_send = self.history.copy()
         
+        # Injecter le prompt système de la personnalité
+        system_prompt = CONFIG["persona"].get("system_prompt", "")
+        
         # Injecter les souvenirs pertinents dans le contexte
         if self.memory:
-            memories = self.memory.get_memories_as_text(message, n_results=3)
+            # On utilise le top_k de la config
+            top_k = CONFIG["memory"].get("top_k", 3)
+            memories = self.memory.get_memories_as_text(message, n_results=top_k)
             
-            # Ajouter les souvenirs au contexte système si pertinents
             if memories:
-                # Insérer les souvenirs après le premier message ou en système
-                messages_to_send.insert(0, {
-                    "role": "system",
-                    "content": memories
-                })
+                system_prompt += f"\n\nContexte mémorisé :\n{memories}"
+
+        if system_prompt:
+            messages_to_send.insert(0, {
+                "role": "system",
+                "content": system_prompt.strip()
+            })
 
         # Envoyer la requête
         if stream:

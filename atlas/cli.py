@@ -2,7 +2,8 @@ import typer
 from rich.console import Console
 from rich.prompt import Prompt
 from atlas.llm import OllamaClient, ChatSession
-from atlas.memory import VectorMemory          # import corrigé
+from atlas.memory import VectorMemory
+from atlas.config import CONFIG          # import corrigé
 
 app = typer.Typer()
 console = Console()
@@ -42,12 +43,13 @@ def handle_command(command: str, session: ChatSession, memory: VectorMemory):
 
 @app.command()
 def chat(
-    model: str = typer.Option("llama3.2:3b", help="Modèle Ollama à utiliser"),
+    model: str = typer.Option(CONFIG["model"].get("name", "llama3.2:3b"), help="Modèle Ollama à utiliser"),
     timeout: int = typer.Option(30, help="Timeout en secondes"),
     stream: bool = typer.Option(False, help="Activer le streaming"),
 ):
     """Lance l'assistant IA Atlas en mode interactif."""
-    console.print("[bold green]Bienvenue dans Atlas AI ![/bold green]")
+    persona_name = CONFIG["persona"].get("name", "Atlas")
+    console.print(f"[bold green]Bienvenue dans {persona_name} AI ![/bold green]")
     console.print(f"Modèle : {model} | Mémoire : activée\n")
 
     client = OllamaClient(timeout=timeout)
@@ -72,28 +74,21 @@ def chat(
             handle_command(user_input, session, memory)
             continue
 
-        # ── Injection mémoire dans le prompt système ──────────────────────
-        souvenir = memory.retrieve_best_memory(user_input)
+        # Note: L'injection de mémoire et le prompt système sont maintenant gérés 
+        # directement dans ChatSession.send_message (ou via un wrapper).
+        # Cependant, pour garder la CLI compatible avec le flux actuel :
         system = None
-        if souvenir:
-            system = f"Contexte issu de tes souvenirs :\n{souvenir}"
-            console.print(f"[dim]Souvenir injecté[/dim]")
+        # On laisse ChatSession gérer le prompt système global via sa propre logique.
 
         # ── Appel LLM ─────────────────────────────────────────────────────
         try:
-            console.print("[bold red]Atlas[/bold red]", end=" : ")
-            session.history.append({"role": "user", "content": user_input})
-            
+            console.print(f"[bold red]{persona_name}[/bold red]", end=" : ")
+            # On utilise ChatSession.send_message qui gère maintenant 
+            # l'injection de la config (persona + mémoire)
             if stream:
-                response = session.client.chat(
-                    session.model, session.history, stream=True, system=system
-                )
+                response = session.send_message(user_input, stream=True)
             else:
-                response, prompt_tokens, completion_tokens = session.client.chat_with_metrics(
-                    session.model, session.history, stream=False, system=system
-                )
-            
-            session.history.append({"role": "assistant", "content": response})
+                response = session.send_message(user_input, stream=False)
 
             if not stream:
                 console.print(response)
