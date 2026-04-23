@@ -2,6 +2,7 @@ import httpx
 import json
 from typing import List, Dict, Optional, Iterator, Union
 import time
+from atlas.memory import VectorMemory
 
 class OllamaClient:
     def __init__(self, base_url: str = "http://localhost:11434", timeout: int = 30):
@@ -69,24 +70,52 @@ class OllamaClient:
         self._client.close()
 
 class ChatSession:
-    def __init__(self, model: str, client: OllamaClient):
+    def __init__(self, model: str, client: OllamaClient, enable_memory: bool = True):
         self.model = model
         self.client = client
         self.history: List[Dict[str, str]] = []
+        
+        # Initialiser la mémoire vectorielle
+        self.enable_memory = enable_memory
+        if enable_memory:
+            self.memory = VectorMemory()
+        else:
+            self.memory = None
 
     def send_message(self, message: str, stream: bool = False) -> str:
         """Envoie un message et met à jour l'historique."""
         self.history.append({"role": "user", "content": message})
 
+        # Préparer les messages à envoyer au modèle
+        messages_to_send = self.history.copy()
+        
+        # Injecter les souvenirs pertinents dans le contexte
+        if self.memory:
+            memories = self.memory.get_memories_as_text(message, n_results=3)
+            
+            # Ajouter les souvenirs au contexte système si pertinents
+            if memories:
+                # Insérer les souvenirs après le premier message ou en système
+                messages_to_send.insert(0, {
+                    "role": "system",
+                    "content": memories
+                })
+
+        # Envoyer la requête
         if stream:
             response_parts = []
-            for part in self.client.chat(self.model, self.history, stream=True):
+            for part in self.client.chat(self.model, messages_to_send, stream=True):
                 response_parts.append(part)
                 print(part, end="", flush=True)
             response = "".join(response_parts)
             print()  # Nouvelle ligne après streaming
         else:
-            response = self.client.chat(self.model, self.history, stream=False)
+            response = self.client.chat(self.model, messages_to_send, stream=False)
+
+        # Stocker le message de l'utilisateur et la réponse en mémoire
+        if self.memory:
+            self.memory.store_message("user", message)
+            self.memory.store_message("assistant", response)
 
         self.history.append({"role": "assistant", "content": response})
         return response
