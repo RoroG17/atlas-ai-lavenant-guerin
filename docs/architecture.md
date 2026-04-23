@@ -45,9 +45,5 @@ Chaque appel LLM est décoré par un système de trace qui enregistre :
 - Métadonnées de session
 - Déclenchement des guardrails
 
-## Décisions d'Architecture
-
-*Les décisions détaillées (ADR) sont disponibles dans le dossier [adr/](adr/).*
-
 ### Modelfile vs Configuration YAML
 Bien qu'un `Modelfile` soit fourni pour créer une image de référence `atlas` dans Ollama, l'application utilise prioritairement `config/atlas.yaml`. Cela permet d'injecter dynamiquement le contexte de la mémoire vectorielle dans le prompt système, offrant une plus grande souplesse que les paramètres figés d'un modèle.

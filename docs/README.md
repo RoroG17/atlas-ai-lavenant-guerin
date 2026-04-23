@@ -15,5 +15,3 @@ Cette documentation est conçue pour permettre à tout développeur ou décideur
 7.  [**Sécurité**](security.md) : Modèle de menaces et mesures de protection.
 8.  [**ADR (Architecture Decision Records)**](adr/) : Historique des décisions structurantes.
 
----
-*Projet développé dans le cadre du cursus IPI - 2026*

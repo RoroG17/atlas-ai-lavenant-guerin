@@ -160,15 +160,3 @@ atlas-ai/
 | **Latence recherche** | ~10-50ms / 100 messages |
 | **Espace disque** | ~2KB / message |
 | **Max souvenirs** | Illimité (SQLite) |
-
-
----
-
-## Prochaines étapes
-
-- [ ] Sprint 3 : Guardrails métier (règles d'accès)
-- [ ] Résumé automatique tous les N tours
-- [ ] Tags métier (client, projet, topic)
-- [ ] `/forget` sélectif
-- [ ] Export/Import de mémoire
-- [ ] Interface web (bonus)

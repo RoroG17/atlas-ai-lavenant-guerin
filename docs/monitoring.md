@@ -29,7 +29,3 @@ python scripts/analyze_traces.py
 1.  **Latence moyenne** : Permet de détecter une dégradation des performances locales.
 2.  **Consommation de tokens** : Pour estimer la charge et les futurs coûts (si passage sur API payante).
 3.  **Taux de succès du RAG** : Nombre moyen de souvenirs utiles par requête.
-
-## Observabilité avancée (Voie B)
-
-Pour des déploiements en entreprise, le système est compatible avec **Langfuse** (via un décorateur de tracing dédié), offrant des tableaux de bord visuels et une gestion hiérarchique des traces (Traces > Spans > LLM Calls).
