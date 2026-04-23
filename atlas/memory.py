@@ -2,154 +2,170 @@
 import chromadb
 from typing import List, Dict, Optional
 from pathlib import Path
-import json
 from datetime import datetime
+import re
+
+
+# Mots vides à exclure de l'extraction de mots-clés
+_STOPWORDS = {
+    "le", "la", "les", "de", "du", "des", "un", "une", "et", "en",
+    "à", "au", "aux", "ce", "je", "tu", "il", "elle", "nous", "vous",
+    "ils", "elles", "que", "qui", "quoi", "comment", "est", "sont",
+    "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses",
+    "sur", "sous", "dans", "par", "pour", "avec", "sans", "ou", "si",
+    "me", "te", "se", "ne", "pas", "plus", "très", "bien", "tout",
+    "this", "the", "is", "are", "a", "an", "of", "in", "on", "at",
+}
+
+
+def extract_keywords(text: str, min_length: int = 3) -> List[str]:
+    """
+    Extrait les mots-clés significatifs d'un texte.
+    Filtre les stopwords et les mots trop courts.
+    """
+    words = re.findall(r'\b[a-zA-ZÀ-ÿ]{' + str(min_length) + r',}\b', text.lower())
+    return [w for w in words if w not in _STOPWORDS]
+
+
+def summarize_response(response: str, max_length: int = 200) -> str:
+    """
+    Résume une réponse en tronquant à la première phrase complète
+    qui ne dépasse pas max_length caractères.
+    """
+    if len(response) <= max_length:
+        return response
+
+    # Cherche la première coupure propre (fin de phrase)
+    for sep in (". ", ".\n", "! ", "? "):
+        idx = response.find(sep, max_length // 2)
+        if 0 < idx <= max_length:
+            return response[: idx + 1].strip()
+
+    return response[:max_length].rstrip() + "…"
 
 
 class VectorMemory:
     """
     Gère la mémoire vectorielle persistante avec ChromaDB.
-    Stocke les conversations et permet de retrouver des souvenirs pertinents.
+
+    Stratégie :
+    - On stocke un RÉSUMÉ des réponses associé aux MOTS-CLÉS de la question.
+    - On recherche uniquement sur les mots-clés (pas le texte complet).
+    - On n'injecte qu'UN SEUL souvenir dans le prompt (le plus proche).
+    - Les doublons (même ensemble de mots-clés) sont dédupliqués ;
+      en cas de contradiction, la réponse la plus récente écrase l'ancienne.
     """
 
     def __init__(self, memory_path: str = "./data/memory"):
-        """
-        Initialise le client ChromaDB persistant.
-
-        Args:
-            memory_path: Chemin où stocker la mémoire vectorielle
-        """
         self.memory_path = Path(memory_path)
         self.memory_path.mkdir(parents=True, exist_ok=True)
 
-        # Client persistant
         self.client = chromadb.PersistentClient(path=str(self.memory_path))
-
-        # Collection pour les conversations
         self.collection = self.client.get_or_create_collection(
             name="conversations",
-            metadata={"description": "Mémoire des conversations avec l'utilisateur"}
+            metadata={"description": "Résumés de réponses indexés par mots-clés"},
         )
 
-        # Compteur pour les IDs uniques
-        self._message_counter = 0
+    # ── API principale ────────────────────────────────────────────────────────
 
-    def store_message(
-        self,
-        role: str,
-        content: str,
-        metadata: Optional[Dict] = None
-    ) -> str:
+    def store_exchange(self, question: str, response: str) -> Optional[str]:
         """
-        Stocke un message dans la mémoire vectorielle.
+        Stocke le résumé d'une réponse, indexé par les mots-clés de la question.
 
-        Args:
-            role: "user" ou "assistant"
-            content: Le contenu du message
-            metadata: Métadonnées additionnelles (optionnel)
+        - Calcule un ID déterministe à partir des mots-clés → gère les doublons
+          (upsert : la nouvelle réponse écrase l'ancienne si même sujet).
+        - Ne stocke rien si aucun mot-clé n'est extrait.
 
         Returns:
-            ID du message stocké
+            ID du document stocké, ou None si pas de mots-clés.
         """
-        self._message_counter += 1
-        message_id = f"msg_{self._message_counter}"
+        keywords = extract_keywords(question)
+        if not keywords:
+            return None
 
-        # Métadonnées par défaut
-        meta = {
-            "role": role,
+        summary = summarize_response(response)
+
+        # ID déterministe basé sur les mots-clés triés → même sujet = même ID
+        keyword_key = "_".join(sorted(set(keywords)))
+        doc_id = f"kw_{hash(keyword_key) & 0xFFFFFFFF:08x}"
+
+        # Le document ChromaDB = les mots-clés (c'est sur eux qu'on cherche)
+        keyword_document = " ".join(sorted(set(keywords)))
+
+        metadata = {
+            "summary": summary,
+            "keywords": ", ".join(sorted(set(keywords))),
             "timestamp": datetime.now().isoformat(),
         }
-        if metadata:
-            meta.update(metadata)
 
-        # Stocker dans ChromaDB (ChromaDB embarque un modèle d'embedding par défaut)
-        self.collection.add(
-            ids=[message_id],
-            documents=[content],
-            metadatas=[meta]
-        )
+        # upsert : crée ou écrase silencieusement le souvenir existant
+        try:
+            self.collection.upsert(
+                ids=[doc_id],
+                documents=[keyword_document],
+                metadatas=[metadata],
+            )
+        except Exception as e:
+            print(f"[VectorMemory] Erreur stockage : {e}")
+            return None
 
-        return message_id
+        return doc_id
 
-    def retrieve_memories(
-        self,
-        query: str,
-        n_results: int = 5
-    ) -> List[Dict]:
+    def retrieve_best_memory(self, question: str) -> Optional[str]:
         """
-        Récupère les souvenirs pertinents à partir d'une requête.
-
-        Args:
-            query: Requête pour chercher les souvenirs
-            n_results: Nombre de résultats à retourner
+        Cherche dans la mémoire le souvenir le plus pertinent pour la question.
+        La recherche porte sur les MOTS-CLÉS, pas sur la question brute.
 
         Returns:
-            Liste des souvenirs pertinents avec leur contenu et métadonnées
+            Le résumé formaté (str) à injecter dans le prompt, ou None.
         """
+        if self.collection.count() == 0:
+            return None
+
+        keywords = extract_keywords(question)
+        if not keywords:
+            return None
+
+        query_text = " ".join(keywords)
+
         try:
             results = self.collection.query(
-                query_texts=[query],
-                n_results=n_results
+                query_texts=[query_text],
+                n_results=1,          # ← on n'injecte qu'UN seul souvenir
             )
-
-            # Formatter les résultats
-            memories = []
-            if results and results["documents"] and len(results["documents"]) > 0:
-                for i, doc in enumerate(results["documents"][0]):
-                    memory = {
-                        "content": doc,
-                        "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                        "distance": results["distances"][0][i] if results["distances"] else None
-                    }
-                    memories.append(memory)
-
-            return memories
         except Exception as e:
-            print(f"Erreur lors de la récupération des souvenirs: {e}")
-            return []
+            print(f"[VectorMemory] Erreur recherche : {e}")
+            return None
 
-    def get_memories_as_text(
-        self,
-        query: str,
-        n_results: int = 5
-    ) -> str:
-        """
-        Récupère les souvenirs et les formate pour injection dans le prompt.
+        docs = results.get("documents", [[]])[0]
+        metas = results.get("metadatas", [[]])[0]
 
-        Args:
-            query: Requête de recherche
-            n_results: Nombre de résultats
+        if not docs or not metas:
+            return None
 
-        Returns:
-            Texte formaté des souvenirs pour le prompt
-        """
-        memories = self.retrieve_memories(query, n_results)
+        meta = metas[0]
+        summary = meta.get("summary", "")
+        kw = meta.get("keywords", "")
+        ts = meta.get("timestamp", "")[:10]   # date seule
 
-        if not memories:
-            return ""
+        return (
+            f"Souvenir pertinent ({ts}) — mots-clés : {kw}\n"
+            f"{summary}"
+        )
 
-        formatted = "📚 **Souvenirs pertinents:**\n"
-        for i, memory in enumerate(memories, 1):
-            role = memory["metadata"].get("role", "unknown")
-            timestamp = memory["metadata"].get("timestamp", "")
-            formatted += f"\n{i}. [{role.upper()}] {memory['content'][:100]}..."
+    # ── utilitaires ───────────────────────────────────────────────────────────
 
-        return formatted
-
-    def clear_all(self):
-        """Efface tous les souvenirs (pour tester)."""
-        # ChromaDB ne a pas de méthode delete_all(), donc on supprime et recrée
+    def clear_all(self) -> None:
+        """Efface tous les souvenirs."""
         self.client.delete_collection(name="conversations")
         self.collection = self.client.get_or_create_collection(
             name="conversations",
-            metadata={"description": "Mémoire des conversations avec l'utilisateur"}
+            metadata={"description": "Résumés de réponses indexés par mots-clés"},
         )
-        self._message_counter = 0
 
     def get_collection_stats(self) -> Dict:
-        """Retourne les statistiques de la collection."""
-        count = self.collection.count()
+        """Statistiques de la collection."""
         return {
-            "total_messages": count,
+            "total_memories": self.collection.count(),
             "memory_path": str(self.memory_path),
         }
