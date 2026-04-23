@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlas-ai"
+version = "0.1.0"
+description = "Assistant IA local pour ATLAS Consulting"
+authors = [
+    {name = "Romain", email = "romain@example.com"},
+    {name = "Binôme", email = "binome@example.com"}
+]
+dependencies = [
+    "httpx",
+    "typer",
+    "rich"
+]
+requires-python = ">=3.10"
+
+[project.scripts]
+atlas-chat = "atlas.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["atlas*"]

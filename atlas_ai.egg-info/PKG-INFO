@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: atlas-ai
+Version: 0.1.0
+Summary: Assistant IA local pour ATLAS Consulting
+Author-email: Romain <romain@example.com>, Binôme <binome@example.com>
+Requires-Python: >=3.10
+Requires-Dist: httpx
+Requires-Dist: typer
+Requires-Dist: rich

@@ -14,6 +14,10 @@ Ce projet vise à livrer un prototype d'assistant IA 100 % on-premise pour ATLAS
 3. Téléchargez un modèle compatible avec votre machine (ex. `ollama pull llama3.2:3b`).
 4. Lancez l'assistant :
    ```powershell
-   atlas-chat
+   atlas-chat --model llama3.2:3b
    ```
+   Options disponibles :
+   - `--model` : Spécifier le modèle Ollama
+   - `--timeout` : Timeout en secondes (défaut: 30)
+   - `--stream` : Activer le streaming des réponses (bonus)
 5. Posez vos questions dans la boucle interactive.
