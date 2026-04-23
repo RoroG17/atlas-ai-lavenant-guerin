@@ -83,9 +83,16 @@ def chat(
         try:
             console.print("[bold red]Atlas[/bold red]", end=" : ")
             session.history.append({"role": "user", "content": user_input})
-            response = session.client.chat(
-                session.model, session.history, stream=stream, system=system
-            )
+            
+            if stream:
+                response = session.client.chat(
+                    session.model, session.history, stream=True, system=system
+                )
+            else:
+                response, prompt_tokens, completion_tokens = session.client.chat_with_metrics(
+                    session.model, session.history, stream=False, system=system
+                )
+            
             session.history.append({"role": "assistant", "content": response})
 
             if not stream:

@@ -1,8 +1,9 @@
 import httpx
 import json
-from typing import List, Dict, Optional, Iterator, Union
 import time
+from typing import List, Dict, Optional, Iterator, Union, Tuple
 from atlas.memory import VectorMemory
+from atlas.monitoring import traced
 
 class OllamaClient:
     def __init__(self, base_url: str = "http://localhost:11434", timeout: int = 30):
@@ -18,13 +19,14 @@ class OllamaClient:
         **kwargs
     ) -> Union[str, Iterator[str]]:
         """
-        Envoie une requête de chat à Ollama.
+        Envoie une requête de chat à Ollama (ancien format).
+        Retourne seulement le contenu (pour compatibilité).
 
         Args:
             model: Nom du modèle
             messages: Liste des messages [{"role": "user", "content": "..."}]
             stream: Si True, retourne un itérateur pour le streaming
-            **kwargs: Paramètres supplémentaires (temperature, etc.)
+            **kwargs: Paramètres supplémentaires (temperature, system, etc.)
 
         Returns:
             Réponse complète ou itérateur pour streaming
@@ -48,6 +50,47 @@ class OllamaClient:
                 response.raise_for_status()
                 result = response.json()
                 return result["message"]["content"]
+
+        except httpx.RequestError as e:
+            raise Exception(f"Erreur lors de la requête Ollama: {e}")
+
+    @traced(log_path="./data/logs/interactions.jsonl")
+    def chat_with_metrics(
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        stream: bool = False,
+        **kwargs
+    ) -> Tuple[str, int, int]:
+        """
+        Envoie une requête de chat à Ollama et retourne les véritables métriques.
+        
+        Returns:
+            Tuple (response, prompt_eval_count, eval_count) depuis Ollama
+        """
+        url = f"{self.base_url}/api/chat"
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": stream,
+            **kwargs
+        }
+
+        try:
+            if stream:
+                raise NotImplementedError("chat_with_metrics n'est pas compatible avec stream=True")
+            else:
+                response = self._client.post(url, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                
+                # Extraire les tokens réels depuis Ollama
+                prompt_tokens = result.get("prompt_eval_count", 0)
+                completion_tokens = result.get("eval_count", 0)
+                content = result["message"]["content"]
+                
+                return content, prompt_tokens, completion_tokens
 
         except httpx.RequestError as e:
             raise Exception(f"Erreur lors de la requête Ollama: {e}")
@@ -110,7 +153,7 @@ class ChatSession:
             response = "".join(response_parts)
             print()  # Nouvelle ligne après streaming
         else:
-            response = self.client.chat(self.model, messages_to_send, stream=False)
+            response, prompt_tokens, completion_tokens = self.client.chat_with_metrics(self.model, messages_to_send, stream=False)
 
         # Stocker le message de l'utilisateur et la réponse en mémoire
         if self.memory:
