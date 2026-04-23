@@ -20,6 +20,9 @@ class MemoryConfig(BaseModel):
 class GuardrailsConfig(BaseModel):
     enabled: bool = True
     blocked_topics: List[str] = []
+    max_words: int = Field(100, gt=0)
+    pii_masking: bool = True
+    prompt_injection_blocking: bool = True
 
 class AtlasConfig(BaseModel):
     model: ModelConfig = ModelConfig()

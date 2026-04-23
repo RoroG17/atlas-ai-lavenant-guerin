@@ -18,3 +18,6 @@ memory:
 guardrails:
   enabled: true
   blocked_topics: ["politique", "religion"]
+  max_words: 100
+  pii_masking: true
+  prompt_injection_blocking: true

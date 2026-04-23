@@ -5,6 +5,7 @@ from typing import List, Dict, Optional, Iterator, Union, Tuple
 from atlas.memory import VectorMemory
 from atlas.monitoring import traced
 from atlas.config import CONFIG
+from atlas.guardrails import GuardrailsManager
 
 class OllamaClient:
     def __init__(self, base_url: str = "http://localhost:11434", timeout: int = 30):
@@ -150,6 +151,19 @@ class ChatSession:
 
     def send_message(self, message: str, stream: bool = False) -> str:
         """Envoie un message et met à jour l'historique."""
+        
+        # Application des guardrails
+        guardrails = GuardrailsManager()
+        is_blocked, modified_message, reason = guardrails.apply_guardrails(message)
+        
+        if is_blocked:
+            # Si bloqué, on refuse poliment sans appeler le LLM.
+            # L'historique n'est pas modifié pour ne pas stocker les tentatives d'injections.
+            return f"❌ [Guardrail Activé] {reason}"
+            
+        # On utilise le message potentiellement masqué (PII) pour la suite
+        message = modified_message
+        
         self.history.append({"role": "user", "content": message})
 
         # Préparer les messages à envoyer au modèle
