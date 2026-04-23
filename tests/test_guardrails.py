@@ -4,6 +4,7 @@ from atlas.config import CONFIG
 
 def test_guardrails_length_limit():
     manager = GuardrailsManager()
+    manager.config = manager.config.copy()
     manager.config["max_words"] = 5
     
     # Message court
@@ -17,6 +18,7 @@ def test_guardrails_length_limit():
 
 def test_guardrails_blocked_topics():
     manager = GuardrailsManager()
+    manager.config = manager.config.copy()
     manager.config["blocked_topics"] = ["politique", "religion"]
     
     # Message normal

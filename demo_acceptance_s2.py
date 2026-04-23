@@ -47,8 +47,7 @@ def demo_acceptance_criteria():
     print(f"Bot: {bot_response_a}")
     
     # Stocker en mémoire
-    memory.store_message("user", user_input_a)
-    memory.store_message("assistant", bot_response_a)
+    memory.store_exchange(user_input_a, bot_response_a)
     
     stats = memory.get_collection_stats()
     print(f"\nStocké en mémoire vectorielle")

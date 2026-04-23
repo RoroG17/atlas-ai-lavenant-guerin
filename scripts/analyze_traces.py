@@ -29,7 +29,7 @@ def analyze_traces(log_path: str = "./data/logs/interactions.jsonl"):
     df = pd.DataFrame(data)
 
     print("\n" + "="*50)
-    print("📊 RAPPORT D'ANALYSE DES TRACES (Voie A)")
+    print("RAPPORT D'ANALYSE DES TRACES (Voie A)")
     print("="*50)
 
     # 1. Nombre total d'interactions

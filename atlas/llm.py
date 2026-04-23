@@ -200,8 +200,7 @@ class ChatSession:
 
         # Stocker le message de l'utilisateur et la réponse en mémoire
         if self.memory:
-            self.memory.store_message("user", message)
-            self.memory.store_message("assistant", response)
+            self.memory.store_exchange(message, response)
 
         self.history.append({"role": "assistant", "content": response})
         return response

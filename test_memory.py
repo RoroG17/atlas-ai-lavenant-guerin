@@ -30,17 +30,17 @@ def test_vector_memory():
     print("=" * 60)
     
     memories_to_store = [
-        ("Je m'appelle Dupont et je travaille sur le projet Luna pour le client Atos.", "user"),
-        ("Enchanté Dupont! Je vais mémoriser que vous travaillez sur le projet Luna pour Atos.", "assistant"),
-        ("Luna est un projet stratégique pour 2026-2027.", "user"),
-        ("Luna est un projet stratégique. C'est noté dans ma mémoire longue.", "assistant"),
-        ("Nous allons utiliser une architecture micro-services.", "user"),
-        ("Excellente architecture. Les micro-services vont bien avec Luna et Atos.", "assistant"),
+        ("Je m'appelle Dupont et je travaille sur le projet Luna pour le client Atos.", 
+         "Enchanté Dupont! Je vais mémoriser que vous travaillez sur le projet Luna pour Atos."),
+        ("Luna est un projet stratégique pour 2026-2027.", 
+         "Luna est un projet stratégique. C'est noté dans ma mémoire longue."),
+        ("Nous allons utiliser une architecture micro-services.", 
+         "Excellente architecture. Les micro-services vont bien avec Luna et Atos."),
     ]
     
-    for content, role in memories_to_store:
-        msg_id = memory.store_message(role, content)
-        print(f"  ✓ [{role.upper()}] Stocké: {content[:50]}...")
+    for question, response in memories_to_store:
+        msg_id = memory.store_exchange(question, response)
+        print(f"  ✓ Stocké échange: {question[:30]}... -> {response[:30]}...")
     
     # Afficher les stats
     stats = memory.get_collection_stats()
