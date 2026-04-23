@@ -1,26 +1,53 @@
-# Architecture & Décisions
+# Architecture du Système
 
-## Décisions sur la configuration du modèle (Modelfile vs YAML)
+Atlas AI est un assistant basé sur une architecture RAG (Retrieval-Augmented Generation) locale, intégrant des mécanismes de contrôle (Guardrails) et d'observabilité.
 
-Suite à la création du modèle dérivé `atlas` via Ollama (`Modelfile`), voici les décisions d'architecture concernant la gestion de la configuration et des prompts.
+## Vue d'ensemble
 
-### 1. Le system prompt doit-il vivre dans le Modelfile ou dans le code applicatif ?
+L'application est découpée en composants modulaires :
+- **CLI** : Interface utilisateur riche (Rich/Typer).
+- **LLM Engine** : Interface avec Ollama.
+- **Memory Engine** : Base de données vectorielle (ChromaDB).
+- **Guardrails** : Système de sécurité et de filtrage.
+- **Monitoring** : Système de traces structurées (JSONL).
 
-**Décision : Dans le code applicatif (fichier `atlas.yaml`)**
-**Pourquoi ?** 
-- **Flexibilité et agilité** : Mettre le system prompt dans le code applicatif ou un fichier de configuration permet de modifier la personnalité ou le comportement de l'assistant dynamiquement, sans nécessiter un rebuid du modèle avec la commande `ollama create`.
-- **Injection de contexte (RAG/Mémoire)** : Notre application `atlas-ai` construit le prompt dynamiquement. Le système concatène le prompt de personnalité avec des souvenirs extraits de la mémoire vectorielle. Si le prompt était figé dans le Modelfile, nous n'aurions pas la maîtrise complète du formatage final envoyé à Ollama lors de l'injection en temps réel.
-- **Séparation des préoccupations** : Le modèle LLM (Ollama) sert de moteur brut, l'application métier porte la logique de persona.
+## Flux de données
 
-### 2. Quel impact si un utilisateur change la config YAML mais pas le Modelfile ?
+Le diagramme suivant illustre le cheminement d'une requête utilisateur :
 
-**Impact : Surcharge API (Priorité à la configuration d'exécution)**
-- **Les paramètres (temperature, top_p, num_ctx)** passés via l'API (grâce au YAML injecté dans le payload `options`) **surchargeront toujours** les valeurs encodées dans le Modelfile. L'utilisateur obtiendra donc bien les effets de sa configuration applicative, ce qui est l'effet voulu.
-- **Le System Prompt** : Si l'utilisateur définit un system prompt dans le `Modelfile` ET dans le payload de la requête API, le comportement dépend du moteur (Ollama remplace généralement le system prompt natif par celui fourni dans la requête API, mais cela peut introduire des comportements flous ou résiduels). 
-- **Risque d'incompréhension** : Le principal risque est la confusion du mainteneur (des paramètres dédoublés créent une ambiguïté sur "quelle est la source de vérité"). D'où la nécessité de choisir une seule source.
+```mermaid
+graph TD
+    User((Utilisateur)) --> CLI[Interface CLI]
+    CLI --> GR[Guardrails : Validation/Masquage]
+    GR --> MemSearch[Recherche Mémoire Vectorielle]
+    MemSearch --> LLM[Appel Ollama : Prompt + Contexte]
+    LLM --> Trace[Logging Interaction JSONL]
+    LLM --> MemStore[Stockage échange en mémoire]
+    LLM --> CLI
+    CLI --> User
+```
 
-### 3. Votre CLI doit-elle pointer vers `atlas` ou vers `llama3.2:3b` + system prompt côté code ?
+## Composants Clés
 
-**Décision : Pointeur vers `llama3.2:3b` avec la configuration portée côté code**
-- **Simplicité de déploiement** : Si on pointe vers `atlas`, cela impose à chaque nouveau développeur ou utilisateur de l'application de builder au préalable le Modelfile localement. En pointant vers le modèle natif `llama3.2:3b` avec le `system_prompt` côté code, on réduit drastiquement les étapes d'installation.
-- **Source de Vérité unique** : Laissons la configuration YAML régir le comportement complet. Le `Modelfile` n'est utile que si l'on souhaite distribuer un LLM pré-packagé à travers un réseau sans client lourd devant, ce qui n'est pas notre architecture actuelle (nous avons une belle CLI interactive riche et connectée à une BDD vectorielle).
+### 1. Mémoire Vectorielle (ChromaDB)
+Utilise `chromadb` pour stocker et rechercher des souvenirs pertinents. Les échanges sont résumés et indexés par mots-clés pour optimiser la pertinence du contexte injecté.
+
+### 2. Guardrails
+Intercepte les messages pour :
+- Masquer les PII (Données Personnelles).
+- Bloquer les sujets hors périmètre (Politique, Religion).
+- Détecter les tentatives d'injection de prompt.
+
+### 3. Monitoring
+Chaque appel LLM est décoré par un système de trace qui enregistre :
+- Latence
+- Consommation de tokens
+- Métadonnées de session
+- Déclenchement des guardrails
+
+## Décisions d'Architecture
+
+*Les décisions détaillées (ADR) sont disponibles dans le dossier [adr/](adr/).*
+
+### Modelfile vs Configuration YAML
+Bien qu'un `Modelfile` soit fourni pour créer une image de référence `atlas` dans Ollama, l'application utilise prioritairement `config/atlas.yaml`. Cela permet d'injecter dynamiquement le contexte de la mémoire vectorielle dans le prompt système, offrant une plus grande souplesse que les paramètres figés d'un modèle.
