@@ -7,8 +7,8 @@ name = "atlas-ai"
 version = "0.1.0"
 description = "Assistant IA local pour ATLAS Consulting"
 authors = [
-    {name = "Romain", email = "romain@example.com"},
-    {name = "Binôme", email = "binome@example.com"}
+    {name = "Romain"},
+    {name = "Matis"}
 ]
 dependencies = [
     "httpx",
