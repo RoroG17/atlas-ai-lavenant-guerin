@@ -17,9 +17,3 @@ Ce projet vise à livrer un prototype d'assistant IA 100 % on-premise pour ATLAS
    atlas-chat
    ```
 5. Posez vos questions dans la boucle interactive.
-
-## Qui fait quoi dans le binôme
-- **Romain** : implémentation du client Ollama en Python, gestion du dialogue et de l'historique.
-- **[Nom du binôme]** : mémoire persistante, guardrails, monitoring et configuration.
-
-> Remplacez les noms par ceux de votre binôme si nécessaire.
